@@ -11,6 +11,10 @@
 
 A Streamlit-based web application for tracking Bilibili content creators' video updates with smart incremental fetching.
 
+### 🎯 Why This Tool?
+
+**Pain Point**: Getting a complete list of all videos from a content creator on Bilibili is surprisingly difficult, especially for educational content like online courses or lecture series. The official tools are not user-friendly for this purpose - they lack proper filtering, bulk export, and systematic organization features that are essential for managing educational content.
+
 ### ✨ Features
 
 - 📋 **Following Management**: Add and manage your favorite content creators
@@ -96,6 +100,10 @@ python update_videos.py
 ## 中文
 
 一个基于 Streamlit 的 Web 应用，用于追踪 B站 UP主的视频更新，支持智能增量获取。
+
+### 🎯 为什么需要这个工具？
+
+**痛点**：获取一个 UP 主的所有视频列表非常困难，特别是对于网课、系列讲座这类内容。B站官方的工具不够好用 - 缺乏合适的筛选功能、批量导出功能，以及系统化的整理功能，这些对于管理教育类内容来说是必不可少的。
 
 ### ✨ 功能特性
 
