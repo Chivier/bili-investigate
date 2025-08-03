@@ -1,0 +1,89 @@
+# Python
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Virtual Environment
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+.vim/
+
+# Logs
+*.log
+logs/
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Project specific
+data/*.csv
+data/following.json
+data/*
+!data/.gitkeep
+
+# ChromeDriver
+chromedriver
+chromedriver.exe
+chromedriver_*
+
+# Generated scripts
+run.sh
+update_videos.py
+
+# Docker
+.dockerignore
+
+# Temporary files
+*.tmp
+*.bak
+*~
+.cache/
+
+# OS files
+Thumbs.db
+.DS_Store
+._*
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Test files
+*.txt
+test_*
+*_test.py
+
+# Backup files
+*.backup
+*.old
+
+# Lock files
+*.lock
+package-lock.json
+yarn.lock
+
+.python-version

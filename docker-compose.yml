@@ -1,0 +1,28 @@
+services:
+  bili-tracker:
+    build: .
+    container_name: bili-tracker
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    networks:
+      - bili-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  bili-network:
+    driver: bridge
+
+volumes:
+  bili-data:
+    driver: local
