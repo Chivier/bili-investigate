@@ -51,10 +51,6 @@ chromedriver
 chromedriver.exe
 chromedriver_*
 
-# Generated scripts
-run.sh
-update_videos.py
-
 # Docker
 .dockerignore
 
