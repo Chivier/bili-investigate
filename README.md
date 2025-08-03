@@ -1,5 +1,10 @@
 # Bilibili Video Tracker / B站视频追踪器
 
+<div align="center">
+  <img src="examples/image1.png" width="49%" alt="Video Browser" />
+  <img src="examples/image2.png" width="49%" alt="Following List" />
+</div>
+
 [English](#english) | [中文](#中文)
 
 ## English
