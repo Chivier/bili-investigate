@@ -52,7 +52,7 @@ def get_user_videos(browser, mid: int, max_pages: int = None, progress_callback=
     browser.get(api_user.format(mid))
     
     try:
-        WebDriverWait(browser, 10).until(
+        WebDriverWait(browser, 50).until(
             EC.presence_of_element_located((By.CLASS_NAME, "bili-video-card"))
         )
     except TimeoutException:
@@ -122,7 +122,7 @@ def get_user_nickname(mid: int, executable_path=None):
         
         try:
             # Wait for the page to load
-            WebDriverWait(browser, 10).until(
+            WebDriverWait(browser, 50).until(
                 EC.presence_of_element_located((By.CSS_SELECTOR, ".nickname, .h-name, #h-name"))
             )
             
