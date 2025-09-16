@@ -105,13 +105,28 @@ def get_user_videos(browser, mid: int, max_pages: int = None, progress_callback=
 def get_username(browser, mid):
     try:
         title = browser.title
+        # Handle various title formats
         if '投稿视频' in title:
-            return title.split('投稿视频')[0].strip()
+            username = title.split('投稿视频')[0].strip()
+            if username and username != "哔哩哔哩":
+                return username
+        elif '的个人空间' in title:
+            username = title.split('的个人空间')[0].strip()
+            if username and username != "哔哩哔哩":
+                return username
+        elif '个人主页' in title:
+            parts = title.split('个人主页')[0].split('-')
+            if parts:
+                username = parts[-1].strip()
+                if username and username != "哔哩哔哩":
+                    return username
         elif '的' in title:
-            return title.split('的')[0].strip()
+            username = title.split('的')[0].strip()
+            if username and username != "哔哩哔哩":
+                return username
     except:
         pass
-    
+
     return f"User_{mid}"
 
 
@@ -119,22 +134,37 @@ def get_user_nickname(mid: int, executable_path=None):
     """Fetch user nickname from their profile page"""
     with make_chrome_browser(executable_path=executable_path, headless=True) as browser:
         browser.get(api_profile.format(mid))
-        
+
+        # Wait longer for dynamic content to load
+        time.sleep(3)
+
         try:
-            # Wait for the page to load
-            WebDriverWait(browser, 50).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, ".nickname, .h-name, #h-name"))
-            )
-            
-            # Try multiple selectors
+            # First, always try to get from page title as it's most reliable
+            title = browser.title
+            if '的个人空间' in title:
+                nickname = title.split('的个人空间')[0].strip()
+                if nickname and nickname != "哔哩哔哩":
+                    return nickname
+
+            # If title parsing fails, wait for page elements
+            try:
+                WebDriverWait(browser, 10).until(
+                    lambda driver: driver.title and '的个人空间' in driver.title
+                )
+            except:
+                pass
+
+            # Try multiple selectors for the nickname element
             nickname_selectors = [
+                "h1.h-name",
+                "span#h-name",
+                "div.h-basic span.h-name",
                 ".nickname",
-                ".h-name", 
-                "#h-name",
                 "[class*='nickname']",
-                "[class*='name']"
+                "h1[class*='name']",
+                "span[class*='name']:not([class*='icon'])"
             ]
-            
+
             for selector in nickname_selectors:
                 try:
                     elem = browser.find_element(By.CSS_SELECTOR, selector)
@@ -142,15 +172,21 @@ def get_user_nickname(mid: int, executable_path=None):
                         return elem.text.strip()
                 except:
                     continue
-            
-            # Fallback: try to get from page title
+
+            # Final fallback: parse title again
             title = browser.title
-            if '的个人空间' in title:
-                return title.split('的个人空间')[0].strip()
-            
+            if title:
+                # Handle various title formats
+                if '的个人空间' in title:
+                    return title.split('的个人空间')[0].strip()
+                elif '个人主页' in title:
+                    parts = title.split('个人主页')[0].split('-')
+                    if parts:
+                        return parts[-1].strip()
+
         except Exception as e:
             print(f"Error fetching nickname: {e}")
-        
+
         return f"User_{mid}"
 
 
