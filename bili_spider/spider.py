@@ -21,27 +21,70 @@ api_profile = 'https://space.bilibili.com/{}'
 def make_chrome_browser(executable_path=None, headless=True):
     options = webdriver.ChromeOptions()
     if headless:
-        options.add_argument('--headless')
+        options.add_argument('--headless=new')  # Use new headless mode
         options.add_argument('--window-size=1920,1080')
+    else:
+        options.add_argument('--window-size=1920,1080')
+
+    # Anti-detection measures
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
     options.add_argument('--disable-gpu')
     options.add_argument('--disable-blink-features=AutomationControlled')
-    options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+    options.add_argument('--disable-web-security')
+    options.add_argument('--disable-features=IsolateOrigins,site-per-process')
+
+    # Randomize user agent
+    user_agents = [
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+    ]
+    options.add_argument(f'--user-agent={random.choice(user_agents)}')
+
     options.add_experimental_option('excludeSwitches', ['enable-logging', 'enable-automation'])
     options.add_experimental_option('useAutomationExtension', False)
-    
+
+    # Stealth options
+    options.add_experimental_option("prefs", {
+        "credentials_enable_service": False,
+        "profile.password_manager_enabled": False,
+        "profile.default_content_setting_values.notifications": 2
+    })
+
     # Add additional options for Docker/Linux environment
     options.add_argument('--disable-setuid-sandbox')
     options.add_argument('--disable-extensions')
-    options.add_argument('--disable-images')
-    
+
     if executable_path:
         service = Service(executable_path=executable_path)
         browser = webdriver.Chrome(options=options, service=service)
     else:
         browser = webdriver.Chrome(options=options)
-    
+
+    # Execute stealth JavaScript
+    browser.execute_cdp_cmd('Page.addScriptToEvaluateOnNewDocument', {
+        'source': '''
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['zh-CN', 'zh', 'en']
+            });
+            window.chrome = {
+                runtime: {}
+            };
+            Object.defineProperty(navigator, 'permissions', {
+                get: () => ({
+                    query: () => Promise.resolve({ state: 'granted' })
+                })
+            });
+        '''
+    })
+
     try:
         yield browser
     finally:
@@ -50,13 +93,56 @@ def make_chrome_browser(executable_path=None, headless=True):
 
 def get_user_videos(browser, mid: int, max_pages: int = None, progress_callback=None) -> Generator[Tuple[str, str, str, str, str, str, str], None, None]:
     browser.get(api_user.format(mid))
-    
+
+    # First wait for basic page load
+    time.sleep(3)
+
+    # Check if page has anti-bot measures or errors
+    page_source = browser.page_source
+    if "错误码" in page_source or "UPINFO_ERROR" in page_source or "-352" in page_source:
+        print(f"Page blocked by anti-bot measures for user {mid}")
+        # Try refreshing once
+        browser.refresh()
+        time.sleep(5)
+
     try:
-        WebDriverWait(browser, 50).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "bili-video-card"))
-        )
-    except TimeoutException:
-        print("Timeout waiting for page to load")
+        # Try multiple selectors for video cards
+        video_found = False
+        selectors = [
+            "bili-video-card",
+            "small-item",
+            "video-item",
+            "[class*='video-card']",
+            "[class*='video-item']"
+        ]
+
+        for selector in selectors:
+            try:
+                if selector.startswith('['):
+                    WebDriverWait(browser, 10).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                    )
+                else:
+                    WebDriverWait(browser, 10).until(
+                        EC.presence_of_element_located((By.CLASS_NAME, selector))
+                    )
+                video_found = True
+                break
+            except TimeoutException:
+                continue
+
+        if not video_found:
+            print(f"No video elements found for user {mid}, checking if user has no videos...")
+            # Check if the page says the user has no videos
+            if "还没有投稿视频" in browser.page_source or "没有更多数据" in browser.page_source:
+                print(f"User {mid} has no videos")
+                return
+            else:
+                print("Timeout waiting for page to load, continuing anyway...")
+                time.sleep(5)
+
+    except Exception as e:
+        print(f"Error waiting for page elements: {e}")
         time.sleep(5)
     
     user_name = get_username(browser, mid)
@@ -248,8 +334,24 @@ def get_total_pages(browser):
 def parse_videos_on_page(browser, user_name):
     videos = []
     html = BeautifulSoup(browser.page_source, "html.parser")
+
+    # Try multiple selectors for video cards
+    video_cards = []
+
+    # First try the new format
     video_cards = html.find_all('div', class_='bili-video-card')
-    
+
+    # If no cards found, try alternative selectors
+    if not video_cards:
+        video_cards = html.find_all('div', class_='small-item')
+
+    if not video_cards:
+        video_cards = html.find_all('div', class_='video-item')
+
+    if not video_cards:
+        # Try finding any div with video in the class name
+        video_cards = html.find_all('div', class_=lambda x: x and 'video' in x.lower())
+
     for card in video_cards:
         try:
             link_elem = card.find('a')
