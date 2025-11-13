@@ -70,6 +70,7 @@ Thumbs.db
 
 # Test files
 *.txt
+!requirements.txt
 test_*
 *_test.py
 
