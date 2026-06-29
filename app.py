@@ -61,92 +61,187 @@ if page == "关注列表":
     st.divider()
     
     st.subheader("📋 当前关注列表")
-    
+
+    # Initialize session state for tracking update
+    if 'updating_user' not in st.session_state:
+        st.session_state.updating_user = None
+
     if st.session_state.following_users:
+        # Create table header
+        header_cols = st.columns([2, 3, 2, 2, 1, 1])
+        with header_cols[0]:
+            st.markdown("**用户ID**")
+        with header_cols[1]:
+            st.markdown("**昵称**")
+        with header_cols[2]:
+            st.markdown("**视频数**")
+        with header_cols[3]:
+            st.markdown("**最后更新**")
+        with header_cols[4]:
+            st.markdown("**操作**")
+
+        st.divider()
+
+        # Display user rows
         for user_id, user_info in st.session_state.following_users.items():
-            col1, col2, col3, col4, col5 = st.columns([2, 3, 3, 2, 1])
-            
+            col1, col2, col3, col4, col5, col6 = st.columns([2, 3, 2, 2, 1, 1])
+
             with col1:
-                st.text(f"ID: {user_id}")
-            
+                st.text(f"{user_id}")
+
             with col2:
-                st.text(f"昵称: {user_info['name']}")
-            
+                st.text(f"{user_info['name']}")
+
             with col3:
                 csv_file = f"data/{user_id}.csv"
                 if os.path.exists(csv_file):
                     df = pd.read_csv(csv_file)
-                    st.text(f"视频数: {len(df)}")
+                    st.text(f"{len(df)}")
                 else:
-                    st.text("视频数: 未同步")
-            
+                    st.text("未同步")
+
             with col4:
                 if user_info.get('last_updated'):
-                    st.text(f"更新: {user_info['last_updated'][:10]}")
+                    st.text(f"{user_info['last_updated'][:10]}")
                 else:
-                    st.text("更新: 从未")
-            
+                    st.text("从未")
+
             with col5:
-                if st.button("删除", key=f"del_{user_id}"):
+                if st.button("🔄", key=f"update_{user_id}", help="更新该用户"):
+                    st.session_state.updating_user = user_id
+
+            with col6:
+                if st.button("🗑", key=f"del_{user_id}", help="删除该用户"):
                     del st.session_state.following_users[user_id]
                     save_following()
                     if os.path.exists(f"data/{user_id}.csv"):
                         os.remove(f"data/{user_id}.csv")
                     st.rerun()
+
+        # Update status area below the table
+        if st.session_state.updating_user:
+            st.divider()
+            user_id = st.session_state.updating_user
+            user_info = st.session_state.following_users[user_id]
+
+            # Create a container for update status
+            status_container = st.container()
+            with status_container:
+                st.info(f"🔄 正在更新: {user_info['name']} (ID: {user_id})")
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+
+                from bili_spider.updater import update_user_videos
+                chromedriver_path = "./chromedriver" if os.path.exists("./chromedriver") else None
+
+                def progress_callback(current_page, total_pages, message):
+                    progress = current_page / total_pages if total_pages > 0 else 0
+                    progress_bar.progress(progress)
+                    status_text.text(f"{message}")
+
+                try:
+                    new_count = update_user_videos(
+                        user_id,
+                        user_info['name'],
+                        chromedriver_path=chromedriver_path,
+                        progress_callback=progress_callback
+                    )
+                    user_info['last_updated'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    save_following()
+                    st.success(f"✅ {user_info['name']} 更新完成，新增 {new_count} 个视频")
+                    st.session_state.updating_user = None
+                    time.sleep(2)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ 更新失败: {str(e)}")
+                    st.session_state.updating_user = None
+                    time.sleep(3)
+                    st.rerun()
     else:
         st.info("还没有关注任何用户，请在上方添加")
     
     st.divider()
-    
-    if st.button("🔄 更新所有用户视频", type="primary"):
-        # Create progress containers
-        main_progress = st.progress(0)
-        status_text = st.empty()
-        user_progress_container = st.container()
-        
-        from bili_spider.updater import update_user_videos
-        total_users = len(st.session_state.following_users)
-        chromedriver_path = "./chromedriver" if os.path.exists("./chromedriver") else None
-        
-        for idx, (user_id, user_info) in enumerate(st.session_state.following_users.items()):
-            # Update main progress
-            main_progress.progress((idx) / total_users)
-            status_text.text(f"正在更新用户 {idx + 1}/{total_users}: {user_info['name']} (ID: {user_id})")
-            
-            with user_progress_container:
+
+    # Initialize session state for batch update
+    if 'updating_all' not in st.session_state:
+        st.session_state.updating_all = False
+
+    if st.button("🔄 更新所有用户视频", type="primary", disabled=st.session_state.updating_all or bool(st.session_state.get('updating_user'))):
+        st.session_state.updating_all = True
+        st.rerun()
+
+    # Batch update progress area
+    if st.session_state.updating_all:
+        st.divider()
+
+        # Create a clean progress display area
+        with st.container():
+            st.markdown("### 📊 批量更新进度")
+
+            from bili_spider.updater import update_user_videos
+            total_users = len(st.session_state.following_users)
+            chromedriver_path = "./chromedriver" if os.path.exists("./chromedriver") else None
+
+            # Overall progress
+            overall_progress = st.progress(0)
+            overall_status = st.empty()
+
+            # Current user progress
+            with st.expander("当前用户进度", expanded=True):
+                current_user_info = st.empty()
                 user_progress = st.progress(0)
                 user_status = st.empty()
-                
+
+            # Results summary
+            results_container = st.container()
+            success_count = 0
+            failed_users = []
+
+            for idx, (user_id, user_info) in enumerate(st.session_state.following_users.items()):
+                # Update overall progress
+                overall_progress.progress((idx) / total_users)
+                overall_status.text(f"总进度: {idx + 1}/{total_users} 用户")
+                current_user_info.info(f"🔄 正在更新: {user_info['name']} (ID: {user_id})")
+
                 def progress_callback(current_page, total_pages, message):
                     progress = current_page / total_pages if total_pages > 0 else 0
                     user_progress.progress(progress)
-                    user_status.text(f"{message} - 进度: {int(progress * 100)}%")
-                
+                    user_status.text(f"{message}")
+
                 try:
                     new_count = update_user_videos(
-                        user_id, 
-                        user_info['name'], 
+                        user_id,
+                        user_info['name'],
                         chromedriver_path=chromedriver_path,
                         progress_callback=progress_callback
                     )
-                    
+
                     user_info['last_updated'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     save_following()
-                    
-                    user_status.text(f"✅ {user_info['name']} 更新完成，新增 {new_count} 个视频")
-                    
+
+                    with results_container:
+                        st.success(f"✅ {user_info['name']}: 新增 {new_count} 个视频")
+                    success_count += 1
+
                 except Exception as e:
-                    user_status.text(f"❌ {user_info['name']} 更新失败: {str(e)}")
-                
-                # Clear individual progress after completion
-                time.sleep(1)
-                user_progress.empty()
-                user_status.empty()
-        
-        main_progress.progress(1.0)
-        status_text.text("✅ 所有用户更新完成！")
-        time.sleep(2)
-        st.rerun()
+                    with results_container:
+                        st.error(f"❌ {user_info['name']}: {str(e)}")
+                    failed_users.append(user_info['name'])
+
+                # Reset current user progress
+                user_progress.progress(0)
+                user_status.text("")
+
+            # Final summary
+            overall_progress.progress(1.0)
+            overall_status.text(f"✅ 更新完成！成功: {success_count}/{total_users}")
+
+            if failed_users:
+                st.warning(f"以下用户更新失败: {', '.join(failed_users)}")
+
+            st.session_state.updating_all = False
+            time.sleep(3)
+            st.rerun()
 
 else:
     st.title("📺 视频浏览")
